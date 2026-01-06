@@ -7,15 +7,16 @@ pub fn staticFile(
     socket: std.posix.socket_t,
     path: []const u8,
     allocator: std.mem.Allocator,
-) !void {
+) !u16 {
     // Prevent path traversal
     if (std.mem.indexOf(u8, path, "..") != null) {
-        return sendResponse(
+        try sendResponse(
             socket,
             "403 Forbidden",
             "text/plain",
             "Forbidden",
         );
+        return 403;
     }
 
     // Map "/" → "/index.html"
@@ -29,15 +30,15 @@ pub fn staticFile(
         "public/{s}",
         .{rel_path},
     );
-    // Note: No need to defer free(full_path) as we are using an ArenaAllocator
 
     var file = std.fs.cwd().openFile(full_path, .{}) catch {
-        return sendResponse(
+        try sendResponse(
             socket,
             "404 Not Found",
             "text/plain",
             "Not Found",
         );
+        return 404;
     };
     defer file.close();
 
@@ -56,31 +57,36 @@ pub fn staticFile(
         if (bytes_read == 0) break;
         _ = try std.posix.send(socket, buf[0..bytes_read], 0);
     }
+
+    return 200;
 }
 
-pub fn hello(socket: std.posix.socket_t) !void {
-    return sendResponse(
+pub fn hello(socket: std.posix.socket_t) !u16 {
+    try sendResponse(
         socket,
         "200 OK",
         "text/plain",
         "Hello from Zig HTTP Server!",
     );
+    return 200;
 }
 
-pub fn echo(socket: std.posix.socket_t, req: @import("http/request.zig").Request) !void {
-    return sendResponse(
+pub fn echo(socket: std.posix.socket_t, req: @import("http/request.zig").Request) !u16 {
+    try sendResponse(
         socket,
         "200 OK",
         "text/plain",
         req.body,
     );
+    return 200;
 }
 
-pub fn badRequest(socket: std.posix.socket_t) !void {
-    return sendResponse(
+pub fn badRequest(socket: std.posix.socket_t) !u16 {
+    try sendResponse(
         socket,
         "400 Bad Request",
         "text/plain",
         "Bad Request",
     );
+    return 400;
 }

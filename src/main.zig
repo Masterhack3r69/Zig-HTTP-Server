@@ -3,10 +3,23 @@ const parseRequest = @import("http/parser.zig").parseRequest;
 const route = @import("router.zig").route;
 const handlers = @import("handlers.zig");
 
+var running = std.atomic.Value(bool).init(true);
+
+fn consoleCtrlHandler(ctrl_type: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL {
+    _ = ctrl_type;
+    running.store(false, .seq_cst);
+    return 1;
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+
+    // Register Ctrl-C handler
+    if (std.os.windows.kernel32.SetConsoleCtrlHandler(consoleCtrlHandler, 1) == 0) {
+        std.log.err("Failed to set console ctrl handler", .{});
+    }
 
     var pool: std.Thread.Pool = undefined;
     try pool.init(.{
@@ -22,12 +35,36 @@ pub fn main() !void {
     });
     defer server.deinit();
 
-    std.log.info("Listening on http://localhost:8080", .{});
+    // Set accept timeout (1 second) for the server socket
+    const timeout_ms: u32 = 1000;
+    try std.posix.setsockopt(
+        server.stream.handle,
+        std.posix.SOL.SOCKET,
+        std.posix.SO.RCVTIMEO,
+        std.mem.asBytes(&timeout_ms),
+    );
 
-    while (true) {
-        const conn = try server.accept();
+    std.log.info("Listening on http://localhost:8080. Press Ctrl+C to stop.", .{});
+
+    while (running.load(.seq_cst)) {
+        const conn = server.accept() catch |err| {
+            if (err == error.WouldBlock) {
+                continue;
+            }
+            std.log.err("Accept error: {}", .{err});
+            continue;
+        };
+
         try pool.spawn(handleConnection, .{ conn, allocator });
     }
+
+    std.log.info("Stopping server...", .{});
+    // pool.deinit() will wait for all tasks to finish
+}
+
+fn logRequest(method: []const u8, path: []const u8, status: u16, duration_ns: u64) void {
+    const duration_ms = @as(f64, @floatFromInt(duration_ns)) / 1_000_000.0;
+    std.log.info("[INFO] {s} {s} {} {d:.2}ms", .{ method, path, status, duration_ms });
 }
 
 fn handleConnection(conn: std.net.Server.Connection, allocator: std.mem.Allocator) void {
@@ -67,18 +104,21 @@ fn handleConnection(conn: std.net.Server.Connection, allocator: std.mem.Allocato
 
         if (bytes_read == 0) return; // Client closed connection
 
+        var timer = std.time.Timer.start() catch null;
+
         const req = parseRequest(arena_allocator, buffer[0..bytes_read]) catch |err| {
             // If we read something but couldn't parse it, log it
             std.log.err("HTTP parse error: {}", .{err});
-            handlers.badRequest(conn.stream.handle) catch {};
+            _ = handlers.badRequest(conn.stream.handle) catch {};
             return;
         };
 
-        std.log.info("{s} {s}", .{ req.method, req.path });
-
-        route(req, conn.stream.handle, arena_allocator) catch |err| {
+        const status = route(req, conn.stream.handle, arena_allocator) catch |err| {
             std.log.err("Routing error: {}", .{err});
             return;
         };
+
+        const duration = if (timer) |*t| t.read() else 0;
+        logRequest(req.method, req.path, status, duration);
     }
 }
