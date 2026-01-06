@@ -5,6 +5,7 @@ const getMimeType = @import("http/mime.zig").getMimeType;
 pub fn staticFile(
     socket: std.posix.socket_t,
     path: []const u8,
+    allocator: std.mem.Allocator,
 ) !void {
     // Prevent path traversal
     if (std.mem.indexOf(u8, path, "..") != null) {
@@ -23,11 +24,11 @@ pub fn staticFile(
         path[1..]; // remove leading "/"
 
     const full_path = try std.fmt.allocPrint(
-        std.heap.page_allocator,
+        allocator,
         "public/{s}",
         .{rel_path},
     );
-    defer std.heap.page_allocator.free(full_path);
+    // Note: No need to defer free(full_path) as we are using an ArenaAllocator
 
     var file = std.fs.cwd().openFile(full_path, .{}) catch {
         return sendResponse(
@@ -40,10 +41,10 @@ pub fn staticFile(
     defer file.close();
 
     const content = try file.readToEndAlloc(
-        std.heap.page_allocator,
+        allocator,
         1024 * 1024,
     );
-    defer std.heap.page_allocator.free(content);
+    // Note: No need to defer free(content) as we are using an ArenaAllocator
 
     try sendResponse(
         socket,

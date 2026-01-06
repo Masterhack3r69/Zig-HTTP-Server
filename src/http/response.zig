@@ -13,6 +13,7 @@ pub fn sendResponse(
         "HTTP/1.1 {s}\r\n" ++
             "Content-Length: {}\r\n" ++
             "Content-Type: {s}\r\n" ++
+            "Connection: keep-alive\r\n" ++
             "\r\n",
         .{ status, body.len, content_type },
     );
