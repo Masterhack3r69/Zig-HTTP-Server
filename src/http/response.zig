@@ -1,10 +1,10 @@
 const std = @import("std");
 
-pub fn sendResponse(
+pub fn sendHeaders(
     socket: std.posix.socket_t,
     status: []const u8,
     content_type: []const u8,
-    body: []const u8,
+    content_length: usize,
 ) !void {
     var header_buf: [512]u8 = undefined;
 
@@ -15,13 +15,20 @@ pub fn sendResponse(
             "Content-Type: {s}\r\n" ++
             "Connection: keep-alive\r\n" ++
             "\r\n",
-        .{ status, body.len, content_type },
+        .{ status, content_length, content_type },
     );
 
-    // Send headers
     _ = try std.posix.send(socket, header, 0);
+}
 
-    // Send body
+pub fn sendResponse(
+    socket: std.posix.socket_t,
+    status: []const u8,
+    content_type: []const u8,
+    body: []const u8,
+) !void {
+    try sendHeaders(socket, status, content_type, body.len);
+
     if (body.len > 0) {
         _ = try std.posix.send(socket, body, 0);
     }

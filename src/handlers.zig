@@ -1,5 +1,6 @@
 const std = @import("std");
 const sendResponse = @import("http/response.zig").sendResponse;
+const sendHeaders = @import("http/response.zig").sendHeaders;
 const getMimeType = @import("http/mime.zig").getMimeType;
 
 pub fn staticFile(
@@ -40,18 +41,21 @@ pub fn staticFile(
     };
     defer file.close();
 
-    const content = try file.readToEndAlloc(
-        allocator,
-        1024 * 1024,
-    );
-    // Note: No need to defer free(content) as we are using an ArenaAllocator
+    const stat = try file.stat();
 
-    try sendResponse(
+    try sendHeaders(
         socket,
         "200 OK",
         getMimeType(rel_path),
-        content,
+        stat.size,
     );
+
+    var buf: [4096]u8 = undefined;
+    while (true) {
+        const bytes_read = try file.read(&buf);
+        if (bytes_read == 0) break;
+        _ = try std.posix.send(socket, buf[0..bytes_read], 0);
+    }
 }
 
 pub fn hello(socket: std.posix.socket_t) !void {
@@ -60,6 +64,15 @@ pub fn hello(socket: std.posix.socket_t) !void {
         "200 OK",
         "text/plain",
         "Hello from Zig HTTP Server!",
+    );
+}
+
+pub fn echo(socket: std.posix.socket_t, req: @import("http/request.zig").Request) !void {
+    return sendResponse(
+        socket,
+        "200 OK",
+        "text/plain",
+        req.body,
     );
 }
 

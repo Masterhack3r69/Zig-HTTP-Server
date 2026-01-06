@@ -67,7 +67,7 @@ fn handleConnection(conn: std.net.Server.Connection, allocator: std.mem.Allocato
 
         if (bytes_read == 0) return; // Client closed connection
 
-        const req = parseRequest(buffer[0..bytes_read]) catch |err| {
+        const req = parseRequest(arena_allocator, buffer[0..bytes_read]) catch |err| {
             // If we read something but couldn't parse it, log it
             std.log.err("HTTP parse error: {}", .{err});
             handlers.badRequest(conn.stream.handle) catch {};

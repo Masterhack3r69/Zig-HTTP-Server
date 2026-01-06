@@ -11,6 +11,10 @@ pub fn route(
         return handlers.hello(socket);
     }
 
+    if (std.mem.eql(u8, req.path, "/echo")) {
+        return handlers.echo(socket, req);
+    }
+
     // Everything else → static files
     return handlers.staticFile(socket, req.path, allocator);
 }
