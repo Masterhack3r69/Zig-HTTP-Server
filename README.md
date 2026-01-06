@@ -1,33 +1,16 @@
 # Zig HTTP Server
 
-A multithreaded HTTP/1.1 server written in Zig 0.15.x.  
-This project focuses on explicit memory management, native networking, and
-concurrent request handling using Zig’s standard library.
+A high-performance, multithreaded HTTP server written in Zig 0.15.x. This project demonstrates modern Zig patterns for networking, memory management, and concurrent programming.
 
 ## Features
 
-- **Multithreaded Architecture**  
-  Uses `std.Thread.Pool` to handle multiple client connections concurrently,
-  preventing slow requests from blocking the accept loop.
-
-- **Static File Serving**  
-  Serves files from a dedicated `public/` directory with path traversal
-  protection.
-
-- **Request Routing & Handlers**  
-  Clean separation between HTTP parsing, routing logic, and request handlers.
-
-- **Explicit Memory Management**  
-  Careful allocator usage with well-defined ownership and lifetimes.
-  Known heap allocations are bounded and freed correctly.
-
-- **Native Socket I/O**  
-  Built directly on `std.net` and `std.posix` for platform-aware networking
-  (including correct Windows socket behavior).
-
-- **Minimal HTTP Implementation**  
-  Manual parsing of request lines and headers to demonstrate low-level HTTP
-  server fundamentals.
+- **Multithreaded Architecture**: Uses Zig's `Thread.Pool` to handle hundreds of concurrent requests efficiently.
+- **Streaming File I/O**: Serves large static files in chunks to maintain a low memory footprint.
+- **Graceful Shutdown**: Listens for termination signals (Ctrl+C) and ensures all active requests finish before shutting down.
+- **Request Logging**: Automated logging of HTTP method, path, status codes, and precise request duration.
+- **Security**: Built-in path traversal protection for static files.
+- **Persistent Connections**: Support for HTTP/1.1 Keep-Alive.
+- **Modular Design**: Clean separation between parser, router, handlers, and the core server loop.
 
 ## Getting Started
 
@@ -37,50 +20,48 @@ concurrent request handling using Zig’s standard library.
 
 ### Installation & Usage
 
-```bash
-git clone https://github.com/Masterhack3r69/Zig-HTTP-Server
-cd Zig-HTTP-Server
-zig build run
-```
+1. **Clone the repository**:
 
-The server listens on:
+   ```bash
+   git clone <repo-url>
+   cd zig-http-server
+   ```
 
-```
-http://localhost:8080
-```
+2. **Build and Run**:
 
-### Example Endpoints
+   ```bash
+   zig build run
+   ```
 
-- `GET /` → Serves `public/index.html`
-- `GET /hello` → Returns a plain text greeting
-- Any other path → Attempted static file lookup
+   The server will start on `http://localhost:8080`.
+
+3. **Try the Endpoints**:
+   - `GET /`: Serves `public/index.html`.
+   - `GET /hello`: Returns a plain text greeting.
+   - `POST /echo`: Echoes back the request body.
 
 ## Project Structure
 
 ```text
 ├── src/
-│   ├── main.zig        # Listener, accept loop, thread pool
-│   ├── router.zig      # Request routing
-│   ├── handlers.zig    # HTTP handlers
+│   ├── main.zig        # Entry point, socket loop, and signal handling
+│   ├── router.zig      # Request routing logic
+│   ├── handlers.zig    # HTTP request handlers (static files, echo, etc.)
 │   ├── http/
-│   │   ├── parser.zig
-│   │   ├── request.zig
-│   │   ├── response.zig
-│   │   └── mime.zig
-├── public/
-│   └── index.html
-└── build.zig
+│   │   ├── parser.zig  # Request line and header parsing
+│   │   ├── request.zig # Request data structures
+│   │   ├── response.zig# Response helpers (headers, body)
+│   │   └── mime.zig    # MIME type detection
+│   └── ...
+├── public/             # Static file directory
+└── build.zig           # Zig build configuration
 ```
 
-## Design Notes
+## Technical Highlights
 
-- HTTP compression (gzip/brotli) is intentionally **not implemented**.
-  In production environments, this server is intended to run behind a reverse
-  proxy (e.g. Nginx or Cloudflare) which handles compression more efficiently.
-
-- This project prioritizes clarity and correctness over feature completeness.
-  Advanced features such as keep-alive request loops, streaming file responses,
-  and graceful shutdown can be added incrementally.
+- **Arena Allocation**: Uses `std.heap.ArenaAllocator` per request to simplify memory management and prevent leaks.
+- **Zero-Copy Parsing**: Leverages Zig's slicing for efficient header identification.
+- **Native Networking**: Uses `std.net` and `std.posix` for platform-specific socket optimization.
 
 ## License
 
